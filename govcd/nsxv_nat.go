@@ -27,9 +27,14 @@ type responseEdgeNatRules struct {
 
 // CreateNsxvNatRule creates NAT rule using proxied NSX-V API. It is a synchronuous operation.
 // It returns an object with all fields populated (including ID)
-func (egw *EdgeGateway) CreateNsxvNatRule(natRuleConfig *types.EdgeNatRule) (*types.EdgeNatRule, error) {
+func (egw *EdgeGateway) CreateNsxvNatRule(natRuleConfig *types.EdgeNatRule, aboveRuleId string) (*types.EdgeNatRule, error) {
 	if err := validateCreateNsxvNatRule(natRuleConfig, egw); err != nil {
 		return nil, err
+	}
+
+	params := make(map[string]string)
+	if aboveRuleId != "" {
+		params["aboveRuleId"] = aboveRuleId
 	}
 
 	// Wrap the provided rule for POST request
@@ -42,8 +47,15 @@ func (egw *EdgeGateway) CreateNsxvNatRule(natRuleConfig *types.EdgeNatRule) (*ty
 		return nil, fmt.Errorf("could not get Edge Gateway API endpoint: %s", err)
 	}
 	// We expect to get http.StatusCreated or if not an error of type types.NSXError
-	resp, err := egw.client.ExecuteRequestWithCustomError(httpPath, http.MethodPost, types.AnyXMLMime,
-		"error creating NAT rule: %s", natRuleRequest, &types.NSXError{})
+	var resp *http.Response
+	if aboveRuleId == "" {
+		resp, err = egw.client.ExecuteRequestWithCustomError(httpPath, http.MethodPost, types.AnyXMLMime,
+			"error creating NAT rule: %s", natRuleRequest, &types.NSXError{})
+	} else {
+		errString := fmt.Sprintf("error creating NAT rule (aboveRuleId: %s): %%s", aboveRuleId)
+		resp, err = egw.client.ExecuteParamRequestWithCustomError(httpPath, params, http.MethodPost, types.AnyXMLMime,
+			errString, natRuleConfig, &types.NSXError{})
+	}
 	if err != nil {
 		return nil, err
 	}
